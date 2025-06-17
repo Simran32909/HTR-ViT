@@ -1,0 +1,150 @@
+# This is the single, unified configuration file for your htr-vit-iam project.
+# You can modify all training and model parameters here.
+
+# seed for random number generators in pytorch, numpy and python.random
+seed: 42
+
+# Task name determines the output directory path.
+# e.g., logs/train_htr_iam/
+task_name: "train_htr_iam"
+
+# Set to False to skip training and only run testing.
+# Set `ckpt_path` to the model you want to test.
+train: True
+test: True
+
+# Path to a checkpoint file to resume training or for testing.
+# e.g., "logs/train_htr_iam/runs/2023-10-27_10-00-00/checkpoints/last.ckpt"
+ckpt_path: null
+
+
+# Paths Configuration
+# Defines all the necessary directories for the project.
+paths:
+  root_dir: "."
+  data_dir: ${paths.root_dir}/data/
+  log_dir: ${paths.root_dir}/logs/
+  output_dir: ${paths.log_dir}/${task_name}/runs/${now:%Y-%m-%d_%H-%M-%S}
+  work_dir: ${hydra:runtime.cwd}
+
+# PyTorch Lightning Trainer Configuration
+# See https://lightning.ai/docs/pytorch/stable/common/trainer.html
+trainer:
+  _target_: lightning.pytorch.trainer.Trainer
+  default_root_dir: ${paths.output_dir}
+  min_epochs: 1
+  max_epochs: 50
+  accelerator: gpu # or "cpu"
+  devices: 1
+  deterministic: False # Should be False for CTC as per original repo notes
+  check_val_every_n_epoch: 1
+  num_sanity_val_steps: 0
+
+# Data Module Configuration
+# Configures the data loading for train, validation, and test sets.
+data:
+  _target_: src.data.htr_datamodule.HTRDataModule
+  data_dir: ${paths.data_dir}
+  
+  train_config:
+    _target_: src.data.data_config.DataConfig
+    datasets: [iam] # Specify the dataset to use
+    stage: train
+    img_size: [64, 512] # IMPORTANT: Set image size for HTR-ViT
+    binarize: True
+    batch_size: 16 # Adjust based on your GPU memory
+    num_workers: 8 # Adjust based on your CPU cores
+    pin_memory: True
+    vocab_path: ${paths.data_dir}/vocab.txt
+
+  val_config:
+    _target_: src.data.data_config.DataConfig
+    datasets: [iam]
+    stage: val
+    img_size: ${data.train_config.img_size}
+    binarize: ${data.train_config.binarize}
+    batch_size: ${data.train_config.batch_size}
+    num_workers: ${data.train_config.num_workers}
+    pin_memory: True
+    vocab_path: ${paths.data_dir}/vocab.txt
+
+  test_config:
+    _target_: src.data.data_config.DataConfig
+    datasets: [iam]
+    stage: test
+    img_size: ${data.train_config.img_size}
+    binarize: ${data.train_config.binarize}
+    batch_size: ${data.train_config.batch_size}
+    num_workers: ${data.train_config.num_workers}
+    pin_memory: True
+    vocab_path: ${paths.data_dir}/vocab.txt
+
+# Model Configuration
+# This points to our htr_vit model.
+model:
+  _target_: src.models.crnn_ctc_module.CRNN_CTC_Module
+  optimizer:
+    _target_: torch.optim.AdamW
+    _partial_: true
+    lr: 1e-4
+    weight_decay: 0.5
+  scheduler: null
+  net:
+    _target_: src.models.components.htr_vit.MaskedAutoencoderViT
+    img_size: ${data.train_config.img_size}
+    patch_size: [64, 4]
+    embed_dim: 768
+    depth: 4
+    num_heads: 6
+    mlp_ratio: 4
+  compile: false
+  # These are passed to the Lightning Module but not defined in the original model yaml
+  datasets: ${data}
+  log_val_metrics: false
+
+# Tokenizer Configuration
+tokenizer:
+  _target_: src.data.components.tokenizers.CharTokenizer
+  vocab_file: ${paths.data_dir}/vocab.txt
+
+# Callbacks Configuration
+# Defines actions to be taken during training, like saving checkpoints.
+callbacks:
+  model_checkpoint:
+    _target_: lightning.pytorch.callbacks.ModelCheckpoint
+    dirpath: ${paths.output_dir}/checkpoints
+    filename: "epoch_{epoch:03d}"
+    monitor: "val/cer" # Monitor Character Error Rate for improvement
+    mode: "min"
+    save_last: True
+    save_top_k: 1
+    auto_insert_metric_name: False
+  
+  early_stopping:
+    _target_: lightning.pytorch.callbacks.EarlyStopping
+    monitor: "val/cer" # Monitor Character Error Rate
+    min_delta: 0.001
+    patience: 20 # Stop if no improvement after 20 validation checks
+    verbose: True
+    mode: "min"
+
+# Logger Configuration
+# We disable external loggers like wandb for simplicity.
+logger: null
+
+# Extra settings for convenience
+extras:
+  ignore_warnings: True
+  enforce_tags: False
+  print_config: True
+
+# Hydra settings - needed for the @hydra.main decorator to work
+hydra:
+  run:
+    dir: ${paths.output_dir}
+  sweep:
+    dir: ${paths.output_dir}
+    subdir: ${hydra.job.num}
+  job:
+    name: ${task_name}
+    chdir: false 

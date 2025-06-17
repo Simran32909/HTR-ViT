@@ -1,0 +1,28 @@
+# --------- pytorch/lightning-related --------- #
+#torch>=2.0.0
+#torchvision>=0.15.0
+lightning>=2.0.0
+torchmetrics>=0.11.4
+
+# --------- hugging face --------- #
+# transformers
+# datasets
+
+# --------- hydra --------- #
+hydra-core==1.3.2
+hydra-colorlog==1.2.0
+hydra-optuna-sweeper==1.2.0
+
+# --------- loggers --------- # (uncomment if needed)
+wandb
+# neptune-client
+# mlflow
+# comet-ml
+# aim>=3.16.2  # no lower than 3.16.2, see https://github.com/aimhubio/aim/issues/2550
+
+# --------- others --------- #
+rootutils       # standardizing the project root setup
+rich            # beautiful text formatting in terminal
+# sh            # for running bash commands in some tests (linux/macos only)
+Pillow>9.4.0    # for torchvision
+unidecode	# for encoding ascii text
