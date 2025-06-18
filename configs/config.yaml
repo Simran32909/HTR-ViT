@@ -33,9 +33,9 @@ trainer:
   _target_: lightning.pytorch.trainer.Trainer
   default_root_dir: ${paths.output_dir}
   min_epochs: 1
-  max_epochs: 50
+  max_epochs: 150
   accelerator: gpu 
-  devices: [0]
+  devices: [2]
   deterministic: False # Should be False for CTC as per original repo notes
   check_val_every_n_epoch: 1
   num_sanity_val_steps: 0
@@ -123,7 +123,7 @@ model:
   optimizer:
     _target_: torch.optim.AdamW
     _partial_: true
-    lr: 1e-4
+    lr: 1e-5
     weight_decay: 0.5
   scheduler: null
   net:
@@ -153,7 +153,7 @@ callbacks:
     _target_: lightning.pytorch.callbacks.ModelCheckpoint
     dirpath: ${paths.output_dir}/checkpoints
     filename: "epoch_{epoch:03d}"
-    monitor: "val/cer" # Monitor Character Error Rate for improvement
+    monitor: "val/mean_cer" # Monitor mean Character Error Rate across all val datasets
     mode: "min"
     save_last: True
     save_top_k: 1
@@ -161,7 +161,7 @@ callbacks:
   
   early_stopping:
     _target_: lightning.pytorch.callbacks.EarlyStopping
-    monitor: "val/cer" # Monitor Character Error Rate
+    monitor: "val/mean_cer" # Monitor mean Character Error Rate
     min_delta: 0.001
     patience: 20 # Stop if no improvement after 20 validation checks
     verbose: True
@@ -176,7 +176,8 @@ logger:
     name: ${task_name} # Sets the run name, e.g., "train_htr_rimes"
     save_dir: ${paths.output_dir}
     project: "HTR-ViT"  # <--- SET YOUR W&B PROJECT NAME HERE
-    log_model: "all" # Logs model checkpoints to W&B. Use True to log only the best.
+    # Limit artefact size: don't upload checkpoints to W&B (they remain on local disk).
+    log_model: false
     prefix: ""
 
 extras:
