@@ -4,6 +4,7 @@ from typing import Any, Dict, Tuple
 from torchmetrics.text import CharErrorRate as CER
 from src.utils import pylogger
 from src.utils.logger import MetricLogger
+from omegaconf import DictConfig
 
 log = pylogger.RankedLogger(__name__, rank_zero_only=True)
 
@@ -37,10 +38,13 @@ class CRNN_CTC_Module(LightningModule):
         # self.save_hyperparameters(logger=False, ignore=("datasets"))
         self.save_hyperparameters(logger=False, ignore=("datamodule", "tokenizer", "_logger"))
 
-        # Save datasets names in a list to index from validation_step
-        self.train_datasets = datamodule.train_config.datasets
-        self.val_datasets = datamodule.val_config.datasets
-        self.test_datasets = datamodule.test_config.datasets
+        # Extract dataset names as list for logging/indexing
+        td = datamodule.train_config.datasets
+        vd = datamodule.val_config.datasets
+        ted = datamodule.test_config.datasets
+        self.train_datasets = list(td.keys()) if isinstance(td, (dict, DictConfig)) else td
+        self.val_datasets = list(vd.keys()) if isinstance(vd, (dict, DictConfig)) else vd
+        self.test_datasets = list(ted.keys()) if isinstance(ted, (dict, DictConfig)) else ted
         
         self.log_val_metrics = log_val_metrics
 

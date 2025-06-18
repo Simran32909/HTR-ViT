@@ -1,10 +1,11 @@
 # Datamodules for each Dataset
 import numpy as np
 import torch
-import pytorch_lightning as pl
+import lightning as L
 import hydra
 import cv2
 from PIL import Image
+import torchvision.transforms as transforms
 from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler, RandomSampler
 from unidecode import unidecode
 
@@ -217,7 +218,7 @@ class HTRDataset(Dataset):
         return image, sequece
 
 
-class HTRDataModule(pl.LightningDataModule):
+class HTRDataModule(L.LightningDataModule):
     def __init__(
       self, 
       train_config: DataConfig,
@@ -232,7 +233,7 @@ class HTRDataModule(pl.LightningDataModule):
         self.test_config = test_config
         self.seed = seed
         # Seed everything with Pytorch Lightning
-        pl.seed_everything(self.seed, workers=True)
+        L.seed_everything(self.seed, workers=True)
         torch.manual_seed(self.seed)
         self.vocab_size = tokenizer.vocab_size
         self.text_transform = tokenizer.tokenize       
@@ -245,13 +246,44 @@ class HTRDataModule(pl.LightningDataModule):
         self.save_hyperparameters(logger=False)
         log.info(f'HYPERPARAMETERS: {self.hparams}')
 
+    def get_transforms(self, config):
+        """
+        Get transforms from config.
+        If transforms are specified in config, instantiate them with hydra.
+        Otherwise, return None.
+        """
+        if config.transforms:
+            transform_list = []
+            for t_cfg in config.transforms:
+                # Case 1: DictConfig or dict with _target_
+                if isinstance(t_cfg, (dict,)) and "_target_" in t_cfg:
+                    transform_list.append(hydra.utils.instantiate(t_cfg))
+                # Case 2: string path e.g. "torchvision.transforms.ToTensor"
+                elif isinstance(t_cfg, str):
+                    module_path, cls_name = t_cfg.rsplit(".", 1)
+                    module = __import__(module_path, fromlist=[cls_name])
+                    cls = getattr(module, cls_name)
+                    transform_list.append(cls())
+                # Case 3: already a class/type from torchvision.transforms
+                elif callable(t_cfg):
+                    transform_list.append(t_cfg)
+
+            if len(transform_list) == 1:
+                return transform_list[0]
+            return transforms.Compose(transform_list)
+        return None
         
     def prepare_data(self):
         # Download, split, tokenize, etc...
         pass
        
     def setup(self, stage: str):
-        print(f'Print train_config transforms: {self.train_config.transforms[0]}')
+        # Setup steps that should be done on 
+        # every GPU
+        # print(f'Print train_config transforms: {self.train_config.transforms[0]}')
+        if stage == "fit":
+            self.train_transforms = self.get_transforms(self.train_config)
+            self.val_transforms = self.get_transforms(self.val_config)
         self.stage = stage
         print(f'Setting up stage {stage}...')
 
@@ -268,9 +300,15 @@ class HTRDataModule(pl.LightningDataModule):
             self.__setattr__(_stage + "_sampler", None)
             
             print(f'CONFIGS: {configs[_stage]}')
+            from omegaconf import DictConfig
             for dataset in configs[_stage].datasets:
-              ds = configs[_stage].datasets[dataset]
-              
+              ds_cfg = configs[_stage].datasets[dataset]
+              # Instantiate if config dict
+              if isinstance(ds_cfg, (dict, DictConfig)) and "_target_" in ds_cfg:
+                  ds = hydra.utils.instantiate(ds_cfg)
+              else:
+                  ds = ds_cfg
+               
               print(f'DATASET: {ds}')
 
               # Check type of instance

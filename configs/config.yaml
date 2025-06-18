@@ -42,24 +42,42 @@ trainer:
 
 # Data Module Configuration
 # Configures the data loading for train, validation, and test sets.
+# Data Module Configuration
 data:
   _target_: src.data.htr_datamodule.HTRDataModule
-  tokenizer : ${tokenizer}
+  tokenizer: ${tokenizer}
 
   train_config:
     _target_: src.data.data_config.DataConfig
-    datasets: [rimes] # Specify the dataset to use
+    datasets:
+      rimes:
+        _target_: src.data.data_config.DatasetConfig
+        name: rimes
+        images_path: ${paths.data_dir}/htr_datasets/rimes/RIMES-2011-Lines/Images/
+        labels_path: ${paths.data_dir}/htr_datasets/rimes/RIMES-2011-Lines/Transcriptions/
+        splits_path: ${paths.data_dir}/htr_datasets/rimes/RIMES-2011-Lines/Sets/train.txt
+        read_data: src.data.data_utils.read_data_rimes
     stage: train
-    img_size: [64, 512] # IMPORTANT: Set image size for HTR-ViT
+    img_size: [64, 512]
     binarize: True
-    batch_size: 64 # Adjust based on your GPU memory
-    num_workers: 8 # Adjust based on your CPU cores
+    batch_size: 64
+    num_workers: 8
     pin_memory: True
     vocab_path: ${paths.data_dir}/vocab.txt
+    transforms:
+      - _target_: torchvision.transforms.ToTensor
+        _args_: []
 
   val_config:
     _target_: src.data.data_config.DataConfig
-    datasets: [rimes]
+    datasets:
+      rimes:
+        _target_: src.data.data_config.DatasetConfig
+        name: rimes
+        images_path: ${paths.data_dir}/htr_datasets/rimes/RIMES-2011-Lines/Images/
+        labels_path: ${paths.data_dir}/htr_datasets/rimes/RIMES-2011-Lines/Transcriptions/
+        splits_path: ${paths.data_dir}/htr_datasets/rimes/RIMES-2011-Lines/Sets/val.txt
+        read_data: src.data.data_utils.read_data_rimes
     stage: val
     img_size: ${data.train_config.img_size}
     binarize: ${data.train_config.binarize}
@@ -67,10 +85,20 @@ data:
     num_workers: ${data.train_config.num_workers}
     pin_memory: True
     vocab_path: ${paths.data_dir}/vocab.txt
+    transforms:
+      - _target_: torchvision.transforms.ToTensor
+        _args_: []
 
   test_config:
     _target_: src.data.data_config.DataConfig
-    datasets: [rimes]
+    datasets:
+      rimes:
+        _target_: src.data.data_config.DatasetConfig
+        name: rimes
+        images_path: ${paths.data_dir}/htr_datasets/rimes/RIMES-2011-Lines/Images/
+        labels_path: ${paths.data_dir}/htr_datasets/rimes/RIMES-2011-Lines/Transcriptions/
+        splits_path: ${paths.data_dir}/htr_datasets/rimes/RIMES-2011-Lines/Sets/test.txt
+        read_data: src.data.data_utils.read_data_rimes
     stage: test
     img_size: ${data.train_config.img_size}
     binarize: ${data.train_config.binarize}
@@ -78,6 +106,10 @@ data:
     num_workers: ${data.train_config.num_workers}
     pin_memory: True
     vocab_path: ${paths.data_dir}/vocab.txt
+    transforms:
+      - _target_: torchvision.transforms.ToTensor
+        _args_: []
+
 
 # Model Configuration
 # This points to our htr_vit model.
