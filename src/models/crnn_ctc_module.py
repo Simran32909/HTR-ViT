@@ -17,7 +17,7 @@ class CRNN_CTC_Module(LightningModule):
         scheduler: torch.optim.lr_scheduler,
         compile: bool,
         _logger: Any,
-        datasets: dict,
+        datamodule: Any,
         tokenizer: Tokenizer,
         log_val_metrics: bool = False,
     ) -> None:
@@ -28,19 +28,19 @@ class CRNN_CTC_Module(LightningModule):
         :param scheduler: The learning rate scheduler to use for training.
         :param compile: Whether to compile the model.
         :param _logger: The logger to use for logging metrics.
-        :param datasets: The datasets to use for training, validation, and testing.
+        :param datamodule: The datamodule with train, val, and test data.
         """
         super().__init__()
 
         # this line allows to access init params with 'self.hparams' attribute
         # also ensures init params will be stored in ckpt
         # self.save_hyperparameters(logger=False, ignore=("datasets"))
-        self.save_hyperparameters(logger=False, ignore=("datasets", "tokenizer", "_logger"))
+        self.save_hyperparameters(logger=False, ignore=("datamodule", "tokenizer", "_logger"))
 
         # Save datasets names in a list to index from validation_step
-        self.train_datasets = list(datasets['train']['train_config']['datasets'].keys())
-        self.val_datasets = list(datasets['val']['val_config']['datasets'].keys())
-        self.test_datasets = list(datasets['test']['test_config']['datasets'].keys())
+        self.train_datasets = datamodule.train_config.datasets
+        self.val_datasets = datamodule.val_config.datasets
+        self.test_datasets = datamodule.test_config.datasets
         
         self.log_val_metrics = log_val_metrics
 

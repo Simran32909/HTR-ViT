@@ -34,8 +34,8 @@ trainer:
   default_root_dir: ${paths.output_dir}
   min_epochs: 1
   max_epochs: 50
-  accelerator: gpu # or "cpu"
-  devices: 1
+  accelerator: gpu 
+  devices: [0]
   deterministic: False # Should be False for CTC as per original repo notes
   check_val_every_n_epoch: 1
   num_sanity_val_steps: 0
@@ -44,15 +44,15 @@ trainer:
 # Configures the data loading for train, validation, and test sets.
 data:
   _target_: src.data.htr_datamodule.HTRDataModule
-  data_dir: ${paths.data_dir}
-  
+  tokenizer : ${tokenizer}
+
   train_config:
     _target_: src.data.data_config.DataConfig
     datasets: [rimes] # Specify the dataset to use
     stage: train
     img_size: [64, 512] # IMPORTANT: Set image size for HTR-ViT
     binarize: True
-    batch_size: 16 # Adjust based on your GPU memory
+    batch_size: 64 # Adjust based on your GPU memory
     num_workers: 8 # Adjust based on your CPU cores
     pin_memory: True
     vocab_path: ${paths.data_dir}/vocab.txt
@@ -83,6 +83,7 @@ data:
 # This points to our htr_vit model.
 model:
   _target_: src.models.crnn_ctc_module.CRNN_CTC_Module
+  _logger : ${logger}
 
   # Pass the tokenizer config to the model
   tokenizer: ${tokenizer}
@@ -101,14 +102,16 @@ model:
     depth: 4
     num_heads: 6
     mlp_ratio: 4
+    tokenizer : ${tokenizer}
   compile: false
   # These are passed to the Lightning Module but not defined in the original model yaml
-  datasets: ${data}
+  datamodule : ${data}
   log_val_metrics: false
 
 # Tokenizer Configuration
 tokenizer:
   _target_: src.data.components.tokenizers.CharTokenizer
+  model_name: "char_tokenizer"
   vocab_file: ${paths.data_dir}/vocab.txt
 
 # Callbacks Configuration
@@ -134,9 +137,16 @@ callbacks:
 
 # Logger Configuration
 # We disable external loggers like wandb for simplicity.
-logger: null
+# Logger Configuration
+logger:
+  wandb:
+    _target_: lightning.pytorch.loggers.WandbLogger
+    name: ${task_name} # Sets the run name, e.g., "train_htr_rimes"
+    save_dir: ${paths.output_dir}
+    project: "HTR-ViT"  # <--- SET YOUR W&B PROJECT NAME HERE
+    log_model: "all" # Logs model checkpoints to W&B. Use True to log only the best.
+    prefix: ""
 
-# Extra settings for convenience
 extras:
   ignore_warnings: True
   enforce_tags: False

@@ -4,11 +4,8 @@ import lightning as L
 from lightning.pytorch.loggers import Logger
 from typing import Any, Dict, List, Tuple
 
-# This utility from the original repo helps with python path resolution
 import rootutils
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
-# Note: You may need to create an empty file named ".project-root" in the top-level
-# directory of your new `htr-vit-iam` project for the line above to work.
 
 from src.utils import (
     pylogger,
@@ -17,7 +14,7 @@ from src.utils import (
     instantiators
 )
 
-log = pylogger.get_pylogger(__name__)
+log = pylogger.RankedLogger(__name__, rank_zero_only=True)
 
 
 @utils.task_wrapper

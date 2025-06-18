@@ -26,3 +26,4 @@ rich            # beautiful text formatting in terminal
 sh            # for running bash commands in some tests (linux/macos only)
 Pillow>9.4.0    # for torchvision
 unidecode	# for encoding ascii text
+timm 
