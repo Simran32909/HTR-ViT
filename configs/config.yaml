@@ -6,7 +6,7 @@ seed: 42
 
 # Task name determines the output directory path.
 # e.g., logs/train_htr_iam/
-task_name: "train_htr_iam"
+task_name: "train_htr_rimes"
 
 # Set to False to skip training and only run testing.
 # Set `ckpt_path` to the model you want to test.
@@ -48,7 +48,7 @@ data:
   
   train_config:
     _target_: src.data.data_config.DataConfig
-    datasets: [iam] # Specify the dataset to use
+    datasets: [rimes] # Specify the dataset to use
     stage: train
     img_size: [64, 512] # IMPORTANT: Set image size for HTR-ViT
     binarize: True
@@ -59,7 +59,7 @@ data:
 
   val_config:
     _target_: src.data.data_config.DataConfig
-    datasets: [iam]
+    datasets: [rimes]
     stage: val
     img_size: ${data.train_config.img_size}
     binarize: ${data.train_config.binarize}
@@ -70,7 +70,7 @@ data:
 
   test_config:
     _target_: src.data.data_config.DataConfig
-    datasets: [iam]
+    datasets: [rimes]
     stage: test
     img_size: ${data.train_config.img_size}
     binarize: ${data.train_config.binarize}
@@ -83,6 +83,10 @@ data:
 # This points to our htr_vit model.
 model:
   _target_: src.models.crnn_ctc_module.CRNN_CTC_Module
+
+  # Pass the tokenizer config to the model
+  tokenizer: ${tokenizer}
+
   optimizer:
     _target_: torch.optim.AdamW
     _partial_: true
