@@ -3,26 +3,35 @@ from omegaconf import DictConfig
 import lightning as L
 from lightning.pytorch.loggers import Logger
 from typing import Any, Dict, List, Tuple
+import torch
 
+# This utility from the original repo helps with python path resolution
 import rootutils
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
+# Note: You may need to create an empty file named ".project-root" in the top-level
+# directory of your new `htr-vit-iam` project for the line above to work.
 
 from src.utils import (
     pylogger,
     rich_utils,
-    utils,
-    instantiators
+    instantiators,
+    extras,
+    task_wrapper,
+    log_hyperparameters,
 )
 
 log = pylogger.RankedLogger(__name__, rank_zero_only=True)
 
 
-@utils.task_wrapper
+@task_wrapper
 def train(cfg: DictConfig) -> Tuple[Dict[str, float], Dict[str, Any]]:
     """Trains the model.
     This method is wrapped in @task_wrapper decorator, that controls the behavior during
     failure. Useful for multiruns, saving info about the crash, etc.
     """
+
+    # set precision for tensor cores
+    torch.set_float32_matmul_precision("medium")
 
     # Set all seeds for reproducibility
     if cfg.get("seed"):
@@ -56,7 +65,7 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, float], Dict[str, Any]]:
 
     if logger:
         log.info("Logging hyperparameters!")
-        utils.log_hyperparameters(object_dict)
+        log_hyperparameters(object_dict)
 
     if cfg.get("train"):
         log.info("Starting training!")
@@ -84,7 +93,7 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, float], Dict[str, Any]]:
 @hydra.main(version_base="1.3", config_path="../configs", config_name="config.yaml")
 def main(cfg: DictConfig) -> None:
     # apply extra utilities like printing config and suppressing warnings
-    utils.extras(cfg)
+    extras(cfg)
 
     # train the model
     train(cfg)
