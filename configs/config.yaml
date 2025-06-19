@@ -33,7 +33,7 @@ trainer:
   _target_: lightning.pytorch.trainer.Trainer
   default_root_dir: ${paths.output_dir}
   min_epochs: 1
-  max_epochs: 150
+  max_epochs: 300
   accelerator: gpu 
   devices: [2]
   deterministic: False # Should be False for CTC as per original repo notes
