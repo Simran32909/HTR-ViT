@@ -302,15 +302,17 @@ class MaskedAutoencoderViT(nn.Module):
         x_masked = x * mask + (1 - mask) * self.mask_token
         return x_masked
 
-    def forward(self, x, mask_ratio=0.4, max_span_length=8, use_masking=True): # Modified to include mask_ratio and max_span_length as in the original paper
+    # By default, no random masking is applied during supervised fine-tuning.
+    # Masking can still be enabled explicitly for self-supervised pre-training.
+    def forward(self, x, mask_ratio: float = 0.0, max_span_length: int = 0, use_masking: bool = False):
         # embed patches
         x = self.layer_norm(x)
         x = self.patch_embed(x)
         # print(f'x shape: {x.shape} after patch embedding')
         b, c, w, h = x.shape
         x = x.view(b, c, -1).permute(0, 2, 1)
-        # masking: length -> length * mask_ratio
-        if use_masking:
+        # Apply random masking only when explicitly requested (e.g. self-supervised pre-training).
+        if use_masking and mask_ratio > 0:
             x = self.random_masking(x, mask_ratio, max_span_length)
         x = x + self.pos_embed
         # apply Transformer blocks

@@ -136,22 +136,28 @@ class CRNN_CTC_Module(LightningModule):
         loss = self.criterion(preds, labels, input_lengths, target_lengths)
         preds_ = preds.clone().permute(1, 0, 2).argmax(-1)
 
-
-        # Log images and predictions
-        if batch_idx < 1:
-          for i in range(images.shape[0]):
+        # Compute train CER for the current batch
+        total_cer = 0.0
+        for i in range(images.shape[0]):
             _label = labels[i].detach().cpu().numpy().tolist()
-            # Remove consecutive repeated tokens
+            # Remove consecutive repeated tokens from predictions
             _pred = torch.unique_consecutive(preds_[i].detach()).cpu().numpy().tolist()
-            _pred = [idx for idx in _pred if idx != self.net.vocab_size] # Remove blank token            
+            _pred = [idx for idx in _pred if idx != self.net.vocab_size]  # Remove blank token
             _pred, _label = self.tokenizer.detokenize(_pred), self.tokenizer.detokenize(_label)
 
-            cer = CER()(_pred, _label)
+            total_cer += CER()(_pred, _label)
 
-        self.metric_logger.log_train_step(loss, torch.tensor([0.0]))
+        avg_cer = total_cer / images.shape[0]
 
-        # update and log metrics
-        self.log("train/loss", loss, on_step=True, on_epoch=True, prog_bar=True)
+        # Log images and predictions for the first batch only to avoid clutter
+        if batch_idx < 1:
+            self.metric_logger.log_images(images, f'train_{", ".join(self.train_datasets)}')
+
+        # Log the metrics
+        self.metric_logger.log_train_step(loss, torch.tensor([avg_cer]))
+
+        # Log to Lightning for progress bar / logger
+        self.log("train/cer", avg_cer, on_step=True, on_epoch=True, prog_bar=True, sync_dist=True)
         
         # Log learning rate
         lr = self.trainer.optimizers[0].param_groups[0]['lr']
