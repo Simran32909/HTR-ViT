@@ -196,3 +196,6 @@ cython_debug/
 data/*
 
 logs/*
+rimes_data/*
+scripts/create_sharada_vocab.py
+scripts/prepare_sharada_splits.py
