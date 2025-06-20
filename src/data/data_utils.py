@@ -11,8 +11,9 @@ from fontTools.ttLib import TTFont
 import cv2
 import re
 import random as rnd
-
 from unidecode import unidecode
+import json
+from pathlib import Path
 
 PAD_IDX, BOS_IDX, EOS_IDX, UNK_IDX = 2, 0, 1, 3
 
@@ -364,3 +365,58 @@ class Degradations(object):
     image = Image.composite(img_pil_background_resized, image, Image.fromarray(mask))
     
     return image
+
+def read_data_sharada(images_path, labels_path, files):
+    """
+    Reads the Sharada synthetic dataset.
+    It navigates the complex directory structure to find all .json files,
+    parses them to get the ground truth, and pairs them with their corresponding image.
+    
+    Note: The 'files' argument (the splits like train.txt) is used to filter the data,
+    but first, we need to gather all available data.
+    """
+    images_paths = []
+    lines = []
+
+    # Use pathlib to efficiently find all .json files
+    # The `images_path` is the root of the dataset, e.g., 'data/small_synthetic'
+    # labels_path is not used here as ground truth is in the json.
+    print(f"[DEBUG] Searching for JSON files in: {images_path}")
+    base_path = Path(images_path)
+    all_json_files = list(base_path.glob('**/*.json'))
+    print(f"[DEBUG] Found {len(all_json_files)} total JSON files.")
+    
+    # Create a set from the split file for efficient lookup
+    split_files_set = set(files)
+    print(f"[DEBUG] Loaded {len(split_files_set)} file IDs from split file.")
+
+    # For debugging, print a few examples
+    if all_json_files:
+        print(f"[DEBUG] Example JSON file stem: {all_json_files[0].stem}")
+    if split_files_set:
+        print(f"[DEBUG] Example ID from split file: {next(iter(split_files_set))}")
+
+    count_found = 0
+    for json_file_path in all_json_files:
+        # The filename (without extension) is the ID used in the split files
+        file_id = json_file_path.stem
+        
+        if file_id in split_files_set:
+            count_found += 1
+            with open(json_file_path, 'r', encoding='utf-8') as f:
+                try:
+                    meta_info = json.load(f)
+                    ground_truth = meta_info.get("original_text")
+                    
+                    # Construct the image path from the json path
+                    image_path = json_file_path.with_suffix('.png')
+
+                    if ground_truth and image_path.exists():
+                        images_paths.append(str(image_path))
+                        lines.append(ground_truth)
+                except (json.JSONDecodeError, KeyError) as e:
+                    print(f"Warning: Could not process file {json_file_path}. Error: {e}")
+
+    print(f"[DEBUG] Matched {count_found} files between JSONs and split file.")
+    print(f"[DEBUG] Returning {len(images_paths)} image paths and {len(lines)} lines.")
+    return images_paths, lines

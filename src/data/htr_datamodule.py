@@ -316,7 +316,7 @@ class HTRDataModule(L.LightningDataModule):
                   read_data = hydra.utils.get_method(ds.read_data)
 
                   # Check if splits_paths corresponds to stage separated in two lines
-                  assert ds.splits_path.split("/")[-1] == _stage + ".txt", \
+                  assert _stage in ds.splits_path.split("/")[-1], \
                     f'File {ds.splits_path} does not correspond to stage {_stage}'
                   
                   with open(ds.splits_path, "r") as f:

@@ -6,7 +6,7 @@ seed: 42
 
 # Task name determines the output directory path.
 # e.g., logs/train_htr_iam/
-task_name: "train_htr_rimes"
+task_name: "train_htr_sharada"
 
 # Set to False to skip training and only run testing.
 # Set `ckpt_path` to the model you want to test.
@@ -21,8 +21,8 @@ ckpt_path: null
 # Paths Configuration
 # Defines all the necessary directories for the project.
 paths:
-  root_dir: "."
-  data_dir: ${paths.root_dir}/data/
+  root_dir: ${hydra:runtime.cwd}
+  data_dir: /ssd_scratch/jyothi.swaroopa/Simran/data
   log_dir: ${paths.root_dir}/logs/
   output_dir: ${paths.log_dir}/${task_name}/runs/${now:%Y-%m-%d_%H-%M-%S}
   work_dir: ${hydra:runtime.cwd}
@@ -33,12 +33,15 @@ trainer:
   _target_: lightning.pytorch.trainer.Trainer
   default_root_dir: ${paths.output_dir}
   min_epochs: 1
-  max_epochs: 500
+  max_epochs: 300
   accelerator: gpu 
-  devices: [2]
+  devices: [1] # Use a single GPU
   deterministic: False # Should be False for CTC as per original repo notes
   check_val_every_n_epoch: 1
   num_sanity_val_steps: 0
+  limit_train_batches: 100
+  limit_val_batches: 20
+  precision: "16-mixed"
 
 # Data Module Configuration
 # Configures the data loading for train, validation, and test sets.
@@ -50,20 +53,20 @@ data:
   train_config:
     _target_: src.data.data_config.DataConfig
     datasets:
-      rimes:
+      sharada:
         _target_: src.data.data_config.DatasetConfig
-        name: rimes
-        images_path: ${paths.data_dir}/htr_datasets/rimes/RIMES-2011-Lines/Images/
-        labels_path: ${paths.data_dir}/htr_datasets/rimes/RIMES-2011-Lines/Transcriptions/
-        splits_path: ${paths.data_dir}/htr_datasets/rimes/RIMES-2011-Lines/Sets/train.txt
-        read_data: src.data.data_utils.read_data_rimes
+        name: sharada
+        images_path: ${paths.data_dir}
+        labels_path: ${paths.data_dir} # Not used by sharada reader, but good practice
+        splits_path: ${paths.data_dir}/train_sharada.txt
+        read_data: src.data.data_utils.read_data_sharada
     stage: train
     img_size: [64, 512]
-    binarize: True
+    binarize: False # Synthetic images are clean
     batch_size: 128
     num_workers: 8
     pin_memory: True
-    vocab_path: ${paths.data_dir}/vocab.txt
+    vocab_path: ${paths.data_dir}/sharada_vocab.txt
     transforms:
       - _target_: torchvision.transforms.ToTensor
         _args_: []
@@ -71,20 +74,20 @@ data:
   val_config:
     _target_: src.data.data_config.DataConfig
     datasets:
-      rimes:
+      sharada:
         _target_: src.data.data_config.DatasetConfig
-        name: rimes
-        images_path: ${paths.data_dir}/htr_datasets/rimes/RIMES-2011-Lines/Images/
-        labels_path: ${paths.data_dir}/htr_datasets/rimes/RIMES-2011-Lines/Transcriptions/
-        splits_path: ${paths.data_dir}/htr_datasets/rimes/RIMES-2011-Lines/Sets/val.txt
-        read_data: src.data.data_utils.read_data_rimes
+        name: sharada
+        images_path: ${paths.data_dir}
+        labels_path: ${paths.data_dir}
+        splits_path: ${paths.data_dir}/val_sharada.txt
+        read_data: src.data.data_utils.read_data_sharada
     stage: val
     img_size: ${data.train_config.img_size}
     binarize: ${data.train_config.binarize}
     batch_size: ${data.train_config.batch_size}
     num_workers: ${data.train_config.num_workers}
     pin_memory: True
-    vocab_path: ${paths.data_dir}/vocab.txt
+    vocab_path: ${paths.data_dir}/sharada_vocab.txt
     transforms:
       - _target_: torchvision.transforms.ToTensor
         _args_: []
@@ -92,20 +95,20 @@ data:
   test_config:
     _target_: src.data.data_config.DataConfig
     datasets:
-      rimes:
+      sharada:
         _target_: src.data.data_config.DatasetConfig
-        name: rimes
-        images_path: ${paths.data_dir}/htr_datasets/rimes/RIMES-2011-Lines/Images/
-        labels_path: ${paths.data_dir}/htr_datasets/rimes/RIMES-2011-Lines/Transcriptions/
-        splits_path: ${paths.data_dir}/htr_datasets/rimes/RIMES-2011-Lines/Sets/test.txt
-        read_data: src.data.data_utils.read_data_rimes
+        name: sharada
+        images_path: ${paths.data_dir}
+        labels_path: ${paths.data_dir}
+        splits_path: ${paths.data_dir}/test_sharada.txt
+        read_data: src.data.data_utils.read_data_sharada
     stage: test
     img_size: ${data.train_config.img_size}
     binarize: ${data.train_config.binarize}
     batch_size: ${data.train_config.batch_size}
     num_workers: ${data.train_config.num_workers}
     pin_memory: True
-    vocab_path: ${paths.data_dir}/vocab.txt
+    vocab_path: ${paths.data_dir}/sharada_vocab.txt
     transforms:
       - _target_: torchvision.transforms.ToTensor
         _args_: []
@@ -144,7 +147,7 @@ model:
 tokenizer:
   _target_: src.data.components.tokenizers.CharTokenizer
   model_name: "char_tokenizer"
-  vocab_file: ${paths.data_dir}/vocab.txt
+  vocab_file: ${paths.data_dir}/sharada_vocab.txt
 
 # Callbacks Configuration
 # Defines actions to be taken during training, like saving checkpoints.
