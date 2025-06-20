@@ -33,15 +33,15 @@ trainer:
   _target_: lightning.pytorch.trainer.Trainer
   default_root_dir: ${paths.output_dir}
   min_epochs: 1
-  max_epochs: 300
+  max_epochs: 350
   accelerator: gpu 
   devices: [1] # Use a single GPU
   deterministic: False # Should be False for CTC as per original repo notes
+  gradient_clip_val: 1.0 # Add gradient clipping to prevent explosion
   check_val_every_n_epoch: 1
   num_sanity_val_steps: 0
-  limit_train_batches: 100
-  limit_val_batches: 20
-  precision: "16-mixed"
+  limit_train_batches: 500
+  limit_val_batches: 100
 
 # Data Module Configuration
 # Configures the data loading for train, validation, and test sets.
@@ -61,7 +61,7 @@ data:
         splits_path: ${paths.data_dir}/train_sharada.txt
         read_data: src.data.data_utils.read_data_sharada
     stage: train
-    img_size: [64, 512]
+    img_size: [64, 768]
     binarize: False # Synthetic images are clean
     batch_size: 128
     num_workers: 8
@@ -70,6 +70,9 @@ data:
     transforms:
       - _target_: torchvision.transforms.ToTensor
         _args_: []
+      - _target_: torchvision.transforms.Normalize
+        mean: [0.485, 0.456, 0.406]
+        std: [0.229, 0.224, 0.225]
 
   val_config:
     _target_: src.data.data_config.DataConfig
@@ -91,6 +94,9 @@ data:
     transforms:
       - _target_: torchvision.transforms.ToTensor
         _args_: []
+      - _target_: torchvision.transforms.Normalize
+        mean: [0.485, 0.456, 0.406]
+        std: [0.229, 0.224, 0.225]
 
   test_config:
     _target_: src.data.data_config.DataConfig
@@ -112,6 +118,9 @@ data:
     transforms:
       - _target_: torchvision.transforms.ToTensor
         _args_: []
+      - _target_: torchvision.transforms.Normalize
+        mean: [0.485, 0.456, 0.406]
+        std: [0.229, 0.224, 0.225]
 
 
 # Model Configuration

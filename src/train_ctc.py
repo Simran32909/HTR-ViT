@@ -22,6 +22,11 @@ from src.utils import (
 
 log = pylogger.RankedLogger(__name__, rank_zero_only=True)
 
+# def nan_hook(module, input, output):
+#     """A hook that checks for NaNs in the output of a module."""
+#     if torch.isnan(output).any():
+#         log.error(f"!!! NaN detected in the output of module: {module.__class__.__name__} !!!")
+#         raise RuntimeError(f"NaN detected in module {module.__class__.__name__}")
 
 @task_wrapper
 def train(cfg: DictConfig) -> Tuple[Dict[str, float], Dict[str, Any]]:
@@ -42,6 +47,11 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, float], Dict[str, Any]]:
 
     log.info(f"Instantiating model <{cfg.model._target_}>")
     model: L.LightningModule = hydra.utils.instantiate(cfg.model)
+
+    # Add the NaN hook to every submodule in the network
+    # for name, module in model.net.named_modules():
+    #     module.register_forward_hook(nan_hook)
+    # log.info("NaN hook registered on all submodules.")
 
     # Instantiate callbacks
     log.info("Instantiating callbacks...")

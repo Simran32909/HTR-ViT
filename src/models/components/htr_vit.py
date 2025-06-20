@@ -229,15 +229,17 @@ class MaskedAutoencoderViT(nn.Module):
                  tokenizer: Tokenizer = None
                  ):
         super().__init__()
+        self.embed_dim = embed_dim
 
         # --------------------------------------------------------------------------
-        # MAE encoder specifics
-        self.layer_norm = LayerNorm()
-        self.patch_embed = ResNet18(embed_dim)
-        self.grid_size = [img_size[1] // patch_size[1], img_size[0] // patch_size[0]]
-        self.img_reduction = (64, 8)
-        self.embed_dim = embed_dim
+        # ViT encoder specifics
+        # self.patch_embed = ResNet18(embed_dim) # This was the source of instability
+        # Replacing with a standard ViT patch embedding
+        self.patch_embed = nn.Conv2d(3, embed_dim, kernel_size=patch_size, stride=patch_size)
+
+        self.grid_size = (img_size[0] // patch_size[0], img_size[1] // patch_size[1])
         self.num_patches = self.grid_size[0] * self.grid_size[1]
+
         self.mask_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.pos_embed = nn.Parameter(torch.zeros(1, self.num_patches, embed_dim),
                                       requires_grad=False)  # fixed sin-cos embedding
@@ -260,8 +262,8 @@ class MaskedAutoencoderViT(nn.Module):
         self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
 
         # initialize patch_embed like nn.Linear (instead of nn.Conv2d)
-        # w = self.patch_embed.proj.weight.data
-        # torch.nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
+        w = self.patch_embed.weight.data
+        torch.nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
 
         # timm's trunc_normal_(std=.02) is effectively normal_(std=0.02) as cutoff is too big (2.)
         # pos_embed = get_2d_sincos_pos_embed(self.embed_dim, [1, self.nb_query])
@@ -277,9 +279,9 @@ class MaskedAutoencoderViT(nn.Module):
             torch.nn.init.xavier_uniform_(m.weight)
             if isinstance(m, nn.Linear) and m.bias is not None:
                 nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.LayerNorm):
-                nn.init.constant_(m.bias, 0)
-                nn.init.constant_(m.weight, 1.0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
 
     def generate_span_mask(self, x, mask_ratio, max_span_length):
         N, L, D = x.shape  # batch, length, dim
@@ -306,11 +308,9 @@ class MaskedAutoencoderViT(nn.Module):
     # Masking can still be enabled explicitly for self-supervised pre-training.
     def forward(self, x, mask_ratio: float = 0.0, max_span_length: int = 0, use_masking: bool = False):
         # embed patches
-        x = self.layer_norm(x)
         x = self.patch_embed(x)
-        # print(f'x shape: {x.shape} after patch embedding')
-        b, c, w, h = x.shape
-        x = x.view(b, c, -1).permute(0, 2, 1)
+        x = x.flatten(2).transpose(1, 2)  # BCHW -> BNC
+
         # Apply random masking only when explicitly requested (e.g. self-supervised pre-training).
         if use_masking and mask_ratio > 0:
             x = self.random_masking(x, mask_ratio, max_span_length)
@@ -322,7 +322,8 @@ class MaskedAutoencoderViT(nn.Module):
         x = self.norm(x)
         # To CTC Loss
         x = self.head(x)
-        x = self.layer_norm(x)
+        # The LayerNorm after the head is unusual and can cause instability.
+        # x = self.layer_norm(x)
 
         return x
 

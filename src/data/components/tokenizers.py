@@ -60,19 +60,20 @@ class CharTokenizer(Tokenizer):
         return "".join([self.ids_to_tokens[i] for i in _token_ids])
 
     def pre_tokenize(self, text: str) -> str:
-        text = unidecode(text)
+        # The unidecode function is removed to support non-Latin scripts like Sharada.
+        # text = unidecode(text) 
         if 'EUR' in text:
           text = text.replace('EUR', '€')
         
         if 'PS' in text:
           text = text.replace('PS', '£')
 
-        return unidecode(text)
+        return text
 
     
     def load(self, vocab_file: str) -> None:
       # Load file and create a dictionary
-      with open(vocab_file, "r") as f:
+      with open(vocab_file, "r", encoding="utf-8") as f:
           vocab = f.readlines()
       
       # Remove \n from each line

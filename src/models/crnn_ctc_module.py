@@ -125,8 +125,9 @@ class CRNN_CTC_Module(LightningModule):
           str_train_datasets = f'train_' + ', '.join(self.train_datasets)
           self.metric_logger.log_images(images, str_train_datasets)
 
+        # The raw labels from the batch, used for CER calculation later
         y = batch[1].permute(1, 0)
-        labels = y[:, 1:].clone().contiguous() # Shift all labels to the right
+        labels = y[:, 1:].clone().contiguous() # Shift all labels to the right for loss
         target_lengths = torch.where(labels == self.tokenizer.eos_id)[1]
 
         # Calculate for CTC the length of the sequence  
@@ -139,7 +140,7 @@ class CRNN_CTC_Module(LightningModule):
         # Compute train CER for the current batch
         total_cer = 0.0
         for i in range(images.shape[0]):
-            _label = labels[i].detach().cpu().numpy().tolist()
+            _label = y[i].detach().cpu().numpy().tolist()
             # Remove consecutive repeated tokens from predictions
             _pred = torch.unique_consecutive(preds_[i].detach()).cpu().numpy().tolist()
             _pred = [idx for idx in _pred if idx != self.net.vocab_size]  # Remove blank token
