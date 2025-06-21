@@ -200,3 +200,8 @@ rimes_data/*
 scripts/create_sharada_vocab.py
 scripts/prepare_sharada_splits.py
 scripts/check_label_lengths.py
+scripts/create_sanity_check_set.py
+scripts/remove_whitespace_dataset.py
+
+eval/ood_predictions.csv
+wandb/*
