@@ -94,21 +94,35 @@ def main(args):
     data_pairs = find_data_pairs(args.ood_data_dir)
     print(f"Found {len(data_pairs)} image-label pairs.")
 
+    if len(data_pairs) == 0:
+        print("ERROR: No data pairs found! Check your data directory path.")
+        wandb.finish()
+        return
+
     results = []
     # Create a W&B Table to log predictions
-    prediction_table = wandb.Table(columns=["image", "ground_truth", "prediction", "cer", "wer"])
+    prediction_table = wandb.Table(columns=["image", "ground_truth", "ground_truth_clean", "prediction", "prediction_clean", "cer", "wer"])
 
     for i, pair in enumerate(tqdm(data_pairs, desc="Running Inference")):
-        # Load ground truth from JSON
         try:
+            # Load ground truth from JSON
             with open(pair["json"], 'r', encoding='utf-8') as f:
                 # Use "original_text" as the key for the ground truth label
-                ground_truth = json.load(f).get("original_text", "")
-        except (json.JSONDecodeError, KeyError):
+                json_data = json.load(f)
+                ground_truth = json_data.get("original_text", "")
+                if not ground_truth:  # Try alternative keys if original_text is empty
+                    ground_truth = json_data.get("text", json_data.get("label", ""))
+                    
+        except (json.JSONDecodeError, KeyError, FileNotFoundError) as e:
+            print(f"Error reading JSON file {pair['json']}: {e}")
             ground_truth = "" # Handle cases with bad JSON or missing key
 
         # Load and preprocess the image
-        image = Image.open(pair["image"]).convert("RGB")
+        try:
+            image = Image.open(pair["image"]).convert("RGB")
+        except Exception as e:
+            print(f"Error loading image {pair['image']}: {e}")
+            continue
         
         # Use collate_fn to preprocess exactly like training
         # collate_fn expects a list of (image_tensor, text) tuples
@@ -134,16 +148,24 @@ def main(args):
             for j in range(images_batch.shape[0]):
                 _pred = torch.unique_consecutive(preds[j].detach()).cpu().numpy().tolist()
                 _pred = [idx for idx in _pred if idx != model.net.vocab_size]  # Remove blank token
+                _pred = [idx for idx in _pred if idx != tokenizer.unk_id]  # Remove UNK token (ID=3)
                 predicted_text = tokenizer.detokenize(_pred)
 
-        # Calculate metrics
-        cer = cer_metric([predicted_text], [ground_truth]).item()
-        wer = wer_metric([predicted_text], [ground_truth]).item()
+        # Remove UNK tokens from both predicted text and ground truth before computing CER
+        # Additional cleanup in case any UNK tokens still remain after filtering at token level
+        predicted_text_clean = predicted_text.replace("[UNK]", "")
+        ground_truth_clean = ground_truth.replace("[UNK]", "")
+
+        # Calculate metrics using cleaned texts
+        cer = cer_metric([predicted_text_clean], [ground_truth_clean]).item()
+        wer = wer_metric([predicted_text_clean], [ground_truth_clean]).item()
 
         results.append({
             "image_path": pair["image"],
             "ground_truth": ground_truth,
+            "ground_truth_clean": ground_truth_clean,
             "prediction": predicted_text,
+            "prediction_clean": predicted_text_clean,
             "cer": cer,
             "wer": wer
         })
@@ -153,29 +175,48 @@ def main(args):
             prediction_table.add_data(
                 wandb.Image(image),
                 ground_truth,
+                ground_truth_clean,
                 predicted_text,
+                predicted_text_clean,
                 cer,
                 wer
             )
 
+    # Check if we have any results
+    if len(results) == 0:
+        print("ERROR: No results were generated! Check that images can be processed and JSON files contain valid text.")
+        wandb.finish()
+        return
+
     # Save results to a CSV file
     df = pd.DataFrame(results)
+    print(f"DataFrame shape: {df.shape}")
+    print(f"DataFrame columns: {df.columns.tolist()}")
+    print(f"First few rows:")
+    print(df.head())
+    
     df.to_csv(args.output_file, index=False, encoding='utf-8')
     print(f"Inference complete. Results saved to {args.output_file}")
 
     # Log the prediction table to W&B
     wandb.log({"OOD Predictions": prediction_table})
 
-    # Log summary metrics
-    mean_cer = df['cer'].mean()
-    mean_wer = df['wer'].mean()
-    wandb.log({
-        "mean_ood_cer": mean_cer,
-        "mean_ood_wer": mean_wer
-    })
+    # Log summary metrics - check if columns exist first
+    if 'cer' in df.columns and 'wer' in df.columns:
+        mean_cer = df['cer'].mean()
+        mean_wer = df['wer'].mean()
+        print(f"Mean CER: {mean_cer:.4f}")
+        print(f"Mean WER: {mean_wer:.4f}")
+        
+        wandb.log({
+            "mean_ood_cer": mean_cer,
+            "mean_ood_wer": mean_wer
+        })
 
-    # Log a histogram of CER values
-    wandb.log({"cer_distribution": wandb.Histogram(df['cer'])})
+        # Log a histogram of CER values
+        wandb.log({"cer_distribution": wandb.Histogram(df['cer'])})
+    else:
+        print(f"ERROR: Expected columns 'cer' and 'wer' not found in DataFrame. Available columns: {df.columns.tolist()}")
 
     wandb.finish()
 
