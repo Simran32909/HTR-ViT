@@ -33,19 +33,18 @@ trainer:
   _target_: lightning.pytorch.trainer.Trainer
   default_root_dir: ${paths.output_dir}
   min_epochs: 1
-  max_epochs: 350
+  max_epochs: 4
   accelerator: gpu 
-  devices: [1] # Use a single GPU
-  deterministic: False # Should be False for CTC as per original repo notes
-  gradient_clip_val: 1.0 # Add gradient clipping to prevent explosion
-  check_val_every_n_epoch: 1
+  devices: [1]
+  precision: "16-mixed" # Use mixed precision for speed
+  deterministic: False
+  gradient_clip_val: 1.0
+  check_val_every_n_epoch: null # Disable epoch-based validation
+  val_check_interval: 500 
   num_sanity_val_steps: 0
-  limit_train_batches: 500
-  limit_val_batches: 100
 
 # Data Module Configuration
 # Configures the data loading for train, validation, and test sets.
-# Data Module Configuration
 data:
   _target_: src.data.htr_datamodule.HTRDataModule
   tokenizer: ${tokenizer}
@@ -62,9 +61,9 @@ data:
         read_data: src.data.data_utils.read_data_sharada
     stage: train
     img_size: [64, 768]
-    binarize: False # Synthetic images are clean
-    batch_size: 128
-    num_workers: 8
+    binarize: False
+    batch_size: 256 # Increase batch size for better GPU utilization
+    num_workers: 16 # Increase workers to prevent data bottlenecks
     pin_memory: True
     vocab_path: ${paths.data_dir}/sharada_vocab.txt
     transforms:
@@ -147,7 +146,7 @@ model:
     num_heads: 6
     mlp_ratio: 4
     tokenizer : ${tokenizer}
-  compile: false
+  compile: True # Use torch.compile for a significant speedup
   # These are passed to the Lightning Module but not defined in the original model yaml
   datamodule : ${data}
   log_val_metrics: false
@@ -164,11 +163,12 @@ callbacks:
   model_checkpoint:
     _target_: lightning.pytorch.callbacks.ModelCheckpoint
     dirpath: ${paths.output_dir}/checkpoints
-    filename: "epoch_{epoch:03d}"
-    monitor: "val/mean_cer" # Monitor mean Character Error Rate across all val datasets
+    filename: "step_{step}-cer_{val/mean_cer:.4f}"
+    monitor: "val/mean_cer"
     mode: "min"
-    save_last: True
-    save_top_k: 1
+    every_n_train_steps: 5000 # Save a checkpoint every 5000 training steps
+    save_top_k: 3 # Save the top 3 best checkpoints
+    save_last: True # Also save the latest checkpoint
     auto_insert_metric_name: False
   
   rich_progress_bar:
